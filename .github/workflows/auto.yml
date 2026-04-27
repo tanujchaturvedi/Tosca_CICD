@@ -1,0 +1,48 @@
+name: GitHub Action For Running Tosca
+run-name: ${{ github.actor }} - SAP Tosca Execution 🚀
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  execute-Tosca-Tests:
+    # Use the specific label you assigned during the ./config.cmd setup
+    runs-on: self-hosted 
+
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v4
+
+      - name: Verify Tosca Connectivity
+        shell: powershell
+        run: |
+          # Ensure the runner can actually "see" the AOS server
+          Test-NetConnection -ComputerName "124.123.109.112" -Port 8082
+
+      - name: Run Tosca Tests via Execution Client
+        shell: powershell
+        run: |
+          $params = @{
+            toscaServerUrl        = "http://124.123.109.112:8082"
+            projectName           = "${{ secrets.PROJECTNAME }}"
+            eventsConfigFilePath  = "configfile.json"
+            # Ensure this secret contains your Base64 Auth string
+            auth                  = "${{ secrets.TOSCA_AUTH_TOKEN }}"
+            clientId              = "${{ secrets.CLIENTID }}"
+            clientSecret          = "${{ secrets.CLIENTSECRET }}"
+            actor                 = "GHA-SelfHosted-Runner"
+            executionEnvironment  = "Dex"
+            pollingInterval       = 10
+            debug                 = $true
+            Verbose               = $true
+          }
+          
+          .\Tosca_execution_client.ps1 @params
+
+      - name: Process JUnit Results
+        uses: EnricoMi/publish-unit-test-result-action/windows@v2
+        if: always()
+        with:
+          files: "results/*.results.xml"
